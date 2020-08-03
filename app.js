@@ -1,18 +1,19 @@
 //jshint esversion:6
 //jshint esversion:6
-require('dotenv').config()
+require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 //const encrypt = require("mongoose-encryption");
 const mongoose = require('mongoose');
-const md5 = require('md5')
+//const md5 = require('md5')
+const bcrypt = require('bcrypt');
+const saltRounds = 10;
 
 const url = 'mongodb://localhost:27017/userDB';
 mongoose.connect(url, { useNewUrlParser: true, useUnifiedTopology: true });
 
 const app = express();
-
 
 app.set('view engine', 'ejs');
 
@@ -25,10 +26,6 @@ const userSchema = new mongoose.Schema({
 	email: String,
 	password: String,
 });
-
-
-// userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password']});
-
 
 const User = new mongoose.model('user', userSchema);
 
@@ -43,36 +40,48 @@ app.get('/register', (req, res) => {
 });
 
 app.post('/register', (req, res) => {
-	const newUser = new User({
-		email: req.body.username,
-		password: md5(req.body.password)
-	});
-	newUser.save((err) => {
-		if (err) {
-			console.log(err);
+	bcrypt.hash(req.body.password, saltRounds, function (err, hash) {
+		if (!err) {
+			const newUser = new User({
+				email: req.body.username,
+				password: hash,
+			});
+
+			newUser.save((err) => {
+				if (err) {
+					console.log(err);
+				} else {
+					res.render('secrets');
+				}
+			});
 		} else {
-			res.render('secrets');
+			res.send(err);
 		}
 	});
 });
 
 app.post('/login', (req, res) => {
 	const username = req.body.username;
-  const password = md5(req.body.password);
-  User.findOne({ email: username }, (err,foundUser) => {
-    if (err) {
-      res.send(err)
-    } else {
-      if (foundUser) {
-        console.log(foundUser);
-        if (foundUser.password === password) {
-          res.render("secrets")
-        }
-      }
-    }
-  })
-  
+	const password = req.body.password;
 
+	User.findOne({ email: username }, (err, foundUser) => {
+		if (err) {
+			console.log(err);
+		} else {
+			if (foundUser) {
+					bcrypt.compare(password, foundUser.password, function (err, result) {
+            // result == true
+           
+
+						if (result === true) {
+							res.render('secrets');
+						} else {
+							res.send(err);
+						}
+					});
+			}
+		}
+	});
 });
 
 app.listen(3000, function () {
